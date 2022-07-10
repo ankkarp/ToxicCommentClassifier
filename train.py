@@ -21,35 +21,32 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertForSequenceClassification, BertTokenizer, logging
+import gc
 
 from BertClassifier import BertClassifier
 from Dataset import Dataset
-from Tester import Tester
+from test import Tester
 from metrics import f1_score
-from utils import create_folder, read_csv_as_dtypes
+from utils import create_folder, load_csv_as_df
 
 
-class Trainer(Tester):
+class Model(Tester):
     def __init__(self, model_class=BertForSequenceClassification, vocab='DeepPavlov/rubert-base-cased-conversational',
                  token_len=64, batch_sz=16):
-        logging.set_verbosity_warning()
         self.model_class = model_class
         Tester.__init__(self, model=None, vocab=vocab, token_len=token_len, batch_sz=batch_sz)
-        self.history = pd.DataFrame(columns=["train_loss", "train_acc", "train_f1_score"
-                                                                        "val_loss", "val_acc", "val_f1_score"])
+        self.history = None
 
     def get_history(self):
         return self.history
 
     def plot_history(self):
-        os.system('clear' if os.name == 'posix' else 'cls')
-        fig = plt.figure(figsize=(30, 12))
-        for i, metric in ("loss", "acc", "f1_score"):
-            ax = fig.add_subplot(1, 3, i)
+        for i, metric in enumerate(("loss", "acc", "f1_score")):
+            ax = plt.subplot(1, 3, i+1)
             ax.title.set_text(metric)
-            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join("train", metric))],
+            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join(("train", metric)))],
                     label="train")
-            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join("train", metric))],
+            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join(("train", metric)))],
                     label="val")
             ax.legend()
         plt.show()
@@ -62,7 +59,7 @@ class Trainer(Tester):
             input_id = x_batch['input_ids'].squeeze(1).to(self.device)
             output = self.model(input_id, mask) if isinstance(self.model, BertClassifier) else \
                 self.model(input_id, mask, return_dict=False)[0]
-            print(output, y_batch)
+            # print(output, y_batch)
             loss = loss_fn(output, y_batch.to(dtype=torch.long))
             batch_loss.append(loss.item())
 
@@ -87,28 +84,27 @@ class Trainer(Tester):
         else:
             self.model = self.model_class(self.vocab).to(self.device)
 
-    def balance(self, df, sz):
+    def balance_data(self, df: pd.DataFrame, sz):
         nontoxic_sample = df[df["toxic"] == 0].sample(sz // 2 if sz else len(df[df["toxic"] == 1]))
         toxic_sample = df[df["toxic"] == 1]
         if sz or sz < len(toxic_sample):
             toxic_sample = toxic_sample.sample(sz)
         return pd.concat((toxic_sample, nontoxic_sample))
 
-    def train(self, train_csv: str, val_csv: str, balance=False, size=None,
-              return_best=True, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
-              display_plots=False, wandb_logging=False):
+    def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
+              balance=False, size=None, get_best=True, wandb_logging=False):
 
-        train_df = read_csv_as_dtypes(train_csv, {"comment": str, "toxic": int})
-        val_df = read_csv_as_dtypes(val_csv, {"comment": str, "toxic": int})
-        print(val_df.info())
+        train_df = load_csv_as_df(train_csv, {"comment": str, "toxic": int})
+        val_df = load_csv_as_df(val_csv, {"comment": str, "toxic": int})
 
         if balance:
-            train_df = self.balance(train_df, size)
-            val_df = self.balance(val_df, size)
+            train_df = self.balance_data(train_df, size)
+            val_df = self.balance_data(val_df, size)
 
         self.init_model()
-        if len(self.history):
-            self.history = pd.DataFrame(columns=self.history.columns)
+        self.history = pd.DataFrame(index=np.arange(1, epochs+1), columns=["train_loss", "train_acc", "train_f1_score",
+                                                                           "val_loss", "val_acc", "val_f1_score"])
+        self.history.index.name = 'epoch'
         loss_fn = nn.CrossEntropyLoss()
         opt = Adam(self.model.parameters(), lr=lr)
         tokenizer = BertTokenizer.from_pretrained(self.vocab)
@@ -120,13 +116,14 @@ class Trainer(Tester):
         val_dataloader = DataLoader(val, batch_size=self.batch_sz)
 
         log_template = "\nEpoch {}/{}:\n\ttrain_loss: {:0.4f}\t train_acc: {:0.4f}\t train_f1_score: {:0.4f}\n" \
-                       "\t\tval_loss: {:0.4f}\t val_acc: {:0.4f}\t val_f1_score: {:0.4f}"
+                       "\tval_loss: {:0.4f}\t val_acc: {:0.4f}\t val_f1_score: {:0.4f}"
         name_template = "./{name}/e{ep}_loss{loss:0.4f}.h5"
         try:
             create_folder(name)
             if wandb_logging:
-                run = wandb.init(project=name)
-                run.name = name
+                run = wandb.init(project=name, config={"learning_rate": lr, "epochs": epochs,
+                                                       "batch_size": self.batch_sz, "token_length": self.token_len,
+                                                       "vocabulary": self.vocab, "model_type": type(self.model)})
 
             for ep in tqdm(range(epochs)):
                 self.model.train()
@@ -135,30 +132,34 @@ class Trainer(Tester):
                 self.model.eval()
 
                 with torch.no_grad():
-                    self.__epoch(dataloader=val_dataloader, loss_fn=loss_fn, ep=ep, opt=opt)
+                    self.__epoch(dataloader=val_dataloader, loss_fn=loss_fn, ep=ep)
 
-                if display_plots:
-                    self.plot_history()
-                tqdm.write(log_template.format(ep + 1, epochs, *self.history[ep].values))
-                print(self.history[ep])
+                tqdm.write(log_template.format(ep + 1, epochs, *self.history.iloc[ep].values))
 
                 if wandb_logging:
-                    run.log(dict(self.history[ep]["train_loss"]))
-                if self.history.iloc[ep]["val_loss"] == self.history["val_loss"].min():
+                    run.log(dict(self.history.iloc[ep]))
+                if get_best and self.history.iloc[ep]["val_loss"] == self.history["val_loss"].min():
                     model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])
                     torch.save(self.model, model_name)
 
         except (Exception, KeyboardInterrupt):
             print(traceback.format_exc())
         finally:
-            if return_best:
-                if wandb_logging:
-                    run.log_artifact(f'./{name}', name=f'{name}', type='model')
-                    run.finish(quiet=True)
+            if get_best and wandb_logging:
+                run.log_artifact(f'./{name}', name=f'{name}', type='model')
+            if get_best:
                 self.model = torch.load(model_name)
+            if wandb_logging:
+                run.finish(quiet=True)
             return self.model
 
 
 if __name__ == "__main__":
-    model = Trainer(token_len=2, batch_sz=2)
-    model.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True, size=16)
+    gc.collect()
+    # model = Model(token_len=2, batch_sz=2)
+    # model.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True, size=2)
+    # print(model.test(test_csv='data_test_public[494].csv', export_file='res.csv'))
+    tester = Tester(None, batch_sz=2, token_len=2)
+    tester.load_model('ToxicCommentClassifier/e4_loss0.7007.h5')
+
+    print(tester.test(test_csv='data_test_public[494].csv', export_file='res.csv', analyse=True))

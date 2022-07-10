@@ -13,7 +13,7 @@ def create_folder(name):
         os.mkdir(f'./{name}')
 
 
-def read_csv_as_dtypes(path, dtypes=None):
+def load_csv_as_df(path, dtypes=None):
     df = pd.read_csv(path, index_col=0)
     if dtypes:
         df.astype(dtypes)
