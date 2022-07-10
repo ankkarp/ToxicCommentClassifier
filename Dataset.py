@@ -5,11 +5,11 @@ import numpy as np
 class Dataset(torch.utils.data.Dataset):
     """Dataset for """
 
-    def __init__(self, tokenizer, df):
+    def __init__(self, tokenizer, data, token_len: int):
 
-        self.labels = [float(label) for label in df['toxic']]
+        self.labels = [float(label) for label in data['toxic']]
         self.texts = [tokenizer(text, padding='max_length', max_length=512, truncation=True, return_tensors="pt")
-                      for text in df['comment']]
+                      for text in data['comment']]
 
     def classes(self):
         return self.labels
