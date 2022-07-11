@@ -79,7 +79,7 @@ class Tester:
     def test(self, test_csv: str, export_file=None, analyse=True):
         labels = {0: "non-toxic", 1: "toxic"}
         if self.model:
-            test_df = load_csv_as_df(test_csv).iloc[:17]
+            test_df = load_csv_as_df(test_csv)
             if "comment" in test_df.columns:
                 self.res_df = test_df.copy().rename(columns={"comment": "text", "toxic": "class_true"})
             self.res_df["class_prediction"] = np.NaN
