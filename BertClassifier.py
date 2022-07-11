@@ -1,16 +1,11 @@
-from transformers import BertTokenizer
 from torch import nn
 from transformers import BertModel
-import numpy as np
-from tqdm import tqdm
-import pandas as pd
-import wandb
-from IPython.display import clear_output
+
 
 class BertClassifier(nn.Module):
-
+    """Модель классификатора, добавляет к предобученной моделе линейный слой для классификации"""
     def __init__(self, model_name, dropout=0.5):
-
+        """Конструктор модели"""
         super(BertClassifier, self).__init__()
 
         self.bert = BertModel.from_pretrained(model_name)

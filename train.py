@@ -1,14 +1,3 @@
-# import argparse
-#
-#
-# def main():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('-n', '--model_name', type=str, default='bert-base-multilingual-uncased',
-#                         help='Pretrained BERT model name (from https://huggingface.co/models?other=bert)')
-#     parser.add_argument('-s', '--save_folder', type=str, default='.')
-#     parser.add_argument('-s', '--save_folder', type=str, default='.')
-
-import os
 import traceback
 
 import matplotlib.pyplot as plt
@@ -25,22 +14,35 @@ import gc
 
 from BertClassifier import BertClassifier
 from Dataset import Dataset
-from test import Tester
+from inference import Tester
 from metrics import f1_score
 from utils import create_folder, load_csv_as_df
 
 
-class Model(Tester):
+class Trainer(Tester):
+    """Класс для обучения модели, также наследует функционал для инференса """
+
     def __init__(self, model_class=BertForSequenceClassification, vocab='DeepPavlov/rubert-base-cased-conversational',
                  token_len=64, batch_sz=16):
+        """
+        Конструктор тренировщика модели
+
+        Параметры:
+            model_class: class (default: BertForSequenceClassification)
+                класс модели (BertForSequenceClassification или BertClassifier)
+            vocab: str (default: 'DeepPavlov/rubert-base-cased-conversational')
+                название модели/словаря bert
+            token_len: int
+                длина токенов, в которые преобразуется текст токенайзеров
+            batch_sz: int
+                размер батча
+        """
         self.model_class = model_class
         Tester.__init__(self, model=None, vocab=vocab, token_len=token_len, batch_sz=batch_sz)
         self.history = None
 
-    def get_history(self):
-        return self.history
-
     def plot_history(self):
+        """Стоит график обучения"""
         for i, metric in enumerate(("loss", "acc", "f1_score")):
             ax = plt.subplot(1, 3, i+1)
             ax.title.set_text(metric)
@@ -52,6 +54,21 @@ class Model(Tester):
         plt.show()
 
     def __epoch(self, dataloader, loss_fn, ep, opt=None):
+        """
+        Проводит одну эпохи обучения/валидации, логирует историю обучения
+
+        Параметры:
+            dataloader: torch.utils.data.dataloader.DataLoader
+                даталоадер обучения/валидации
+            loss_fn
+                функция потерь
+            ep: int
+                номер текущей эпохи
+            opt (default=None)
+                оптимизатор для обучения модели, на эпохе валидации не передавать
+
+        Ничего не возвращает
+        """
         batch_loss, batch_acc, batch_f1_score = [], [], []
         for x_batch, y_batch in dataloader:
             y_batch = y_batch.to(self.device)
@@ -76,7 +93,15 @@ class Model(Tester):
         self.history.iloc[ep][f"{mode}_loss"] = np.mean(batch_loss)
         self.history.iloc[ep][f"{mode}_f1_score"] = np.mean(batch_f1_score)
 
-    def init_model(self):
+    def __init_model(self):
+        """
+        Метод инициализации новой модели класса поля model_class
+
+        Параметры:
+            нет
+
+        Ничего не возвращает
+        """
         if self.model_class == BertForSequenceClassification:
             self.model = BertForSequenceClassification.from_pretrained(self.vocab, num_labels=2,
                                                                        output_attentions=False,
@@ -84,24 +109,69 @@ class Model(Tester):
         else:
             self.model = self.model_class(self.vocab).to(self.device)
 
-    def balance_data(self, df: pd.DataFrame, sz):
-        nontoxic_sample = df[df["toxic"] == 0].sample(sz // 2 if sz else len(df[df["toxic"] == 1]))
-        toxic_sample = df[df["toxic"] == 1]
-        if sz or sz < len(toxic_sample):
+    def balance_data(self, df: pd.DataFrame, sz=None):
+        """
+        Функция для балансировки датасета.
+
+        Параметры:
+            df : pd.Dataframe
+                Датасет с колонками:
+                    comment: str
+                        текст комментария
+                    toxic: float
+                        токсичность комментария (0 - нетоксичный, 1 - токсичный)
+                    sz: int | None (default None)
+                        желаемый размер датасета (если датасет нужно уменьшить),
+                        если None - датасет принимает размер наименьшего класса * 2
+
+        Ничего не возвращает
+        """
+        big_class, small_class = df["toxic"].value_counts().index
+        nontoxic_sample = df[df["toxic"] == big_class].sample(sz // 2 if sz else len(df[df["toxic"] == small_class]))
+        toxic_sample = df[df["toxic"] == small_class]
+        if sz and sz < len(toxic_sample):
             toxic_sample = toxic_sample.sample(sz)
         return pd.concat((toxic_sample, nontoxic_sample))
 
     def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
-              balance=False, size=None, get_best=True, wandb_logging=False):
+              balance=False, balance_sz=None, get_best=True, wandb_logging=False):
+        """
+        Метод для обучения модели
+
+        Параметры:
+            train_csv: str
+                путь к файлу с данными на обучение
+            val_csv: str
+                путь к файлу с данными на валидацию
+            lr: float (default: 5e-6)
+                learning rate для оптимизатора Adam
+            epochs: int
+                кол-во эпох
+            name: str (default "ToxicCommentClassifier")
+                название папки с промежуточными лучшими моделями обучения (при get_best=True),
+                имя проекта в wandb (при wandb_logging=True), иначе не используется
+            balance: bool (default: False)
+                балансировать ли датасет на обучение (выровнять ли количество экземпляров целевых классов в датасете)
+            balance_sz: int (default: None)
+                размер, до которого нужно уменьшить датасеты (при balance=True)
+                если None, то целевые классы будут приведены к размеру меньшего из них
+            get_best: bool (default: True)
+                нужно ли вернуть лучшую модель, если False вернет модель м последней эпохи и не будет локально
+                сохранять сохранять промежуточные лучшие модели
+            wandb_logging: bool (default: False)
+                нужно ли логировать в wandb (требует установка через pip install wandb и
+                аутентификация в wandb аккаунт через wandb login {ключ аутентификации})
+
+        Возвращает обученную модель
+        """
 
         train_df = load_csv_as_df(train_csv, {"comment": str, "toxic": int})
         val_df = load_csv_as_df(val_csv, {"comment": str, "toxic": int})
 
         if balance:
-            train_df = self.balance_data(train_df, size)
-            val_df = self.balance_data(val_df, size)
+            train_df = self.balance_data(train_df, balance_sz)
 
-        self.init_model()
+        self.__init_model()
         self.history = pd.DataFrame(index=np.arange(1, epochs+1), columns=["train_loss", "train_acc", "train_f1_score",
                                                                            "val_loss", "val_acc", "val_f1_score"])
         self.history.index.name = 'epoch'
@@ -152,14 +222,3 @@ class Model(Tester):
             if wandb_logging:
                 run.finish(quiet=True)
             return self.model
-
-
-if __name__ == "__main__":
-    gc.collect()
-    # model = Model(token_len=2, batch_sz=2)
-    # model.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True, size=2)
-    # print(model.test(test_csv='data_test_public[494].csv', export_file='res.csv'))
-    tester = Tester(None, batch_sz=2, token_len=2)
-    tester.load_model('ToxicCommentClassifier/e4_loss0.7007.h5')
-
-    print(tester.test(test_csv='data_test_public[494].csv', export_file='res.csv', analyse=True))
