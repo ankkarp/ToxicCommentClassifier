@@ -59,9 +59,10 @@ class Tester:
         res_info = pd.DataFrame(index=["toxic", "non-toxic", "total"], columns=["accuracy"])
         res_info.loc["total", "accuracy"] = len(df.loc[df["class_prediction"] == df['class_true']]) / len(df)
         for cl in res_info.index[:-1]:
-            pred_n_true = df.loc[df["class_true"] == cl, ['class_prediction', 'class_true']].values.T
-            print(pred_n_true)
-            res_info.loc[cl, "accuracy"] = np.mean(np.array_equal(*pred_n_true))
+            class_df = df.loc[df.index[df["class_true"] == cl].tolist()]
+            print(class_df)
+            # pred_n_true = df.loc[df["class_true"] == cl, ['class_prediction', 'class_true']].values.T
+            res_info.loc[cl, "accuracy"] = len(class_df.index[df["class_true"] == class_df["class_prediciton"]].tolist()) / len(class_df)
         return res_info
 
     def load_model(self, path: str):
@@ -76,10 +77,13 @@ class Tester:
         """
         self.model = torch.load(path, map_location=self.device)
 
+    def load_state_dict(self, path: str):
+        self.model.save_state_dict(path)
+
     def test(self, test_csv: str, export_file=None, analyse=True):
         labels = {0: "non-toxic", 1: "toxic"}
         if self.model:
-            test_df = load_csv_as_df(test_csv)
+            test_df = load_csv_as_df(test_csv).iloc[:17]
             if "comment" in test_df.columns:
                 self.res_df = test_df.copy().rename(columns={"comment": "text", "toxic": "class_true"})
             self.res_df["class_prediction"] = np.NaN
@@ -104,7 +108,7 @@ class Tester:
             self.res_df["class_prediction"].replace(labels, inplace=True)
             print(self.res_df.info())
             if export_file:
-                self.res_df.to_csv(f"./{export_file}")
+                self.res_df.to_csv(export_file)
             if analyse:
                 print(self.analyse_results(self.res_df))
             return self.res_df
