@@ -18,7 +18,7 @@ def f1_score(y_pred, y_true):
     fn = (y_pred & ~y_true).sum()
     fp = (~y_pred & y_true).sum()
     if tp == 0 or tp + fp == 0 or tp + fn == 0:
-        return (y_pred == y_true).sum()
+        return 0
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
     return 2 * precision * recall / (precision + recall)
