@@ -55,14 +55,10 @@ class Tester:
                     probabilities: float
                         вероятность предсказанного класса
         """
-        res_info = pd.DataFrame(index=["toxic", "non-toxic", "total"], columns=["accuracy"])
-        res_info.loc["total", "accuracy"] = len(df.loc[df["class_prediction"] == df['class_true']]) / len(df)
-        for cl in res_info.index[:-1]:
-            class_df = df.loc[df.index[df["class_true"] == cl].tolist()]
-            print(class_df)
-            # pred_n_true = df.loc[df["class_true"] == cl, ['class_prediction', 'class_true']].values.T
-            res_info.loc[cl, "accuracy"] = len(class_df.index[df["class_true"] == class_df["class_prediciton"]].tolist()) / len(class_df)
-        return res_info
+        total = len(df.loc[df["class_prediction"] == df["class_true"]]) / len(df)
+        print("Accuracy:")
+        for d in df, df.loc[df["class_true"] == "toxic"], df.loc[df["class_true"] == "non-toxic"]:
+            print(f'\t{len(d.loc[d["class_prediction"] == d["class_true"]]) / len(d)}')
 
     def load_model(self, path: str):
         """
@@ -110,3 +106,8 @@ class Tester:
             return self.res_df
         else:
             print("Нет модели")
+
+
+if __name__ == "__main__":
+    df1 = pd.DataFrame(np.random.randint(0, high=2, size=(16, 2)))
+    print(df1[df1[0] == 0])
