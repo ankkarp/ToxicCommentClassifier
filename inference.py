@@ -7,7 +7,6 @@ import numpy as np
 
 from BertClassifier import BertClassifier
 from Dataset import Dataset
-from metrics import f1_score
 from utils import load_csv_as_df
 
 pd.options.mode.chained_assignment = None
@@ -76,9 +75,6 @@ class Tester:
             ничего
         """
         self.model = torch.load(path, map_location=self.device)
-
-    def load_state_dict(self, path: str):
-        self.model.save_state_dict(path)
 
     def test(self, test_csv: str, export_file=None, analyse=True):
         labels = {0: "non-toxic", 1: "toxic"}

@@ -136,9 +136,6 @@ class Trainer(Tester):
     def get_model(self):
         return self.model
 
-    def save_state_dict(self, path):
-        torch.save(self.model.state_dict(), path)
-
     def save_model(self, path):
         torch.save(self.model, path)
 
@@ -196,7 +193,7 @@ class Trainer(Tester):
 
         log_template = "\nEpoch {}/{}:\n\ttrain_loss: {:0.4f}\t train_acc: {:0.4f}\t train_f1_score: {:0.4f}\n" \
                        "\tval_loss: {:0.4f}\t val_acc: {:0.4f}\t val_f1_score: {:0.4f}"
-        name_template = "./{name}/e{ep}_loss{loss:0.4f}.pth"
+        name_template = "./{name}/e{ep}_loss{loss:0.4f}.h5"
         try:
             create_folder(name)
             if wandb_logging:
@@ -219,13 +216,13 @@ class Trainer(Tester):
                     run.log(dict(self.history.iloc[ep]))
                 if get_best and self.history.iloc[ep]["val_loss"] == self.history["val_loss"].min():
                     model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])
-                    self.save_state_dict(model_name)
+                    self.save_model(model_name)
 
         except (Exception, KeyboardInterrupt):
             print(traceback.format_exc())
         finally:
             if get_best:
-                self.load_state_dict(model_name)
+                self.load_model(model_name)
             if wandb_logging:
                 run.finish(quiet=True)
             return self.model
