@@ -23,7 +23,7 @@ class Trainer(Tester):
     """Класс для обучения модели, также наследует функционал для инференса """
 
     def __init__(self, model_class=BertForSequenceClassification, vocab='DeepPavlov/rubert-base-cased-conversational',
-                 token_len=64, batch_sz=16):
+                 token_len=128, batch_sz=16):
         """
         Конструктор тренировщика модели
 
@@ -133,6 +133,15 @@ class Trainer(Tester):
             toxic_sample = toxic_sample.sample(sz)
         return pd.concat((toxic_sample, nontoxic_sample))
 
+    def get_model(self):
+        return self.model
+
+    def save_state_dict(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def save_model(self, path):
+        torch.save(self.model, path)
+
     def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
               balance=False, balance_sz=None, get_best=True, wandb_logging=False):
         """
@@ -187,7 +196,7 @@ class Trainer(Tester):
 
         log_template = "\nEpoch {}/{}:\n\ttrain_loss: {:0.4f}\t train_acc: {:0.4f}\t train_f1_score: {:0.4f}\n" \
                        "\tval_loss: {:0.4f}\t val_acc: {:0.4f}\t val_f1_score: {:0.4f}"
-        name_template = "./{name}/e{ep}_loss{loss:0.4f}.h5"
+        name_template = "./{name}/e{ep}_loss{loss:0.4f}.pth"
         try:
             create_folder(name)
             if wandb_logging:
@@ -209,16 +218,15 @@ class Trainer(Tester):
                 if wandb_logging:
                     run.log(dict(self.history.iloc[ep]))
                 if get_best and self.history.iloc[ep]["val_loss"] == self.history["val_loss"].min():
-                    model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])
-                    torch.save(self.model, model_name)
+                    model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])\
+                        .replace(".", "_")
+                    self.save_state_dict(model_name)
 
         except (Exception, KeyboardInterrupt):
             print(traceback.format_exc())
         finally:
-            if get_best and wandb_logging:
-                run.log_artifact(f'./{name}', name=f'{name}', type='model')
             if get_best:
-                self.model = torch.load(model_name)
+                self.load_state_dict(model_name)
             if wandb_logging:
                 run.finish(quiet=True)
             return self.model
