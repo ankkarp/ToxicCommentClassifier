@@ -218,8 +218,7 @@ class Trainer(Tester):
                 if wandb_logging:
                     run.log(dict(self.history.iloc[ep]))
                 if get_best and self.history.iloc[ep]["val_loss"] == self.history["val_loss"].min():
-                    model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])\
-                        .replace(".", "_")
+                    model_name = name_template.format(name=name, ep=ep + 1, loss=self.history.iloc[ep]["val_loss"])
                     self.save_state_dict(model_name)
 
         except (Exception, KeyboardInterrupt):
