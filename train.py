@@ -21,7 +21,7 @@ class Trainer(Tester):
     """Класс для обучения модели, также наследует функционал для инференса """
 
     def __init__(self, model_class=BertForSequenceClassification, vocab='DeepPavlov/rubert-base-cased-conversational',
-                 token_len=128, batch_sz=16):
+                 token_len=128):
         """
         Конструктор тренировщика модели
 
@@ -32,8 +32,6 @@ class Trainer(Tester):
                 название модели/словаря bert
             token_len: int
                 длина токенов, в которые преобразуется текст токенайзеров
-            batch_sz: int
-                размер батча
         """
         self.model_class = model_class
         Tester.__init__(self, model=None, vocab=vocab, token_len=token_len, batch_sz=batch_sz)
@@ -130,7 +128,7 @@ class Trainer(Tester):
         """Метод для сохранения модели как файла"""
         torch.save(self.model, path)
 
-    def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
+    def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, batch_sz=16, name='ToxicCommentClassifier',
               balance=False, balance_sz=None, get_best=True, wandb_logging=False):
         """
         Метод для обучения модели
@@ -144,6 +142,8 @@ class Trainer(Tester):
                 learning rate для оптимизатора Adam
             epochs: int
                 кол-во эпох
+            batch_sz: int
+                размер батча
             name: str (default "ToxicCommentClassifier")
                 название папки с промежуточными лучшими моделями обучения (при get_best=True),
                 имя проекта в wandb (при wandb_logging=True), иначе не используется
@@ -220,16 +220,16 @@ class Trainer(Tester):
 
 
 #тестовая демонстрация работоспособности кода, подаются параметры для наибыстрешейего выполнения на пк
-if __name__ == "__main__":
-    trainer = Trainer(token_len=4, batch_sz=8)
-    model = trainer.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True,
-                          balance_sz=50, epochs=1, wandb_logging=True)
-    print(trainer.test(test_csv='data_test_public[494].csv', export_file='res.csv'))
-    print(trainer.get_mistakes(export_file='mistakes.csv', print_accs=True))
-    print(trainer.get_history())
-#     trainer2 = Trainer(model_class=BertClassifier, token_len=4, batch_sz=8)
+# if __name__ == "__main__":
+#     trainer = Trainer(token_len=4)
+#     model = trainer.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True,
+#                           balance_sz=50, epochs=1, batch_sz=8, wandb_logging=True)
+#     print(trainer.test(test_csv='data_test_public[494].csv', export_file='res.csv'))
+#     print(trainer.get_mistakes(export_file='mistakes.csv', print_accs=True))
+#     print(trainer.get_history())
+#     trainer2 = Trainer(model_class=BertClassifier, token_len=4)
 #     model2 = trainer2.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True,
-#                             balance_sz=50, epochs=1)
-#     tester = Tester(model2, token_len=4, batch_sz=8)
-#     print(trainer2.test(test_csv='data_test_public[494].csv', export_file='res2.csv'))
+#                             balance_sz=50, epochs=1, batch_sz=8)
+#     tester = Tester(model2, token_len=4)
+#     print(trainer2.test(test_csv='data_test_public[494].csv', export_file='res2.csv', batch_sz=8))
 #     print(trainer2.get_mistakes(export_file='mistakes2.csv', print_accs=True))

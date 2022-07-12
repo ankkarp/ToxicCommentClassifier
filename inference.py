@@ -16,7 +16,7 @@ class Tester:
     """
     Класс тестировщика, позволяет провести инференс модели
     """
-    def __init__(self, model=None, vocab='DeepPavlov/rubert-base-cased-conversational', token_len=128, batch_sz=16):
+    def __init__(self, model=None, vocab='DeepPavlov/rubert-base-cased-conversational', token_len=128):
         """
         Конструктор тестировщика
 
@@ -27,8 +27,6 @@ class Tester:
                 название модели/словаря bert
             token_len: int
                 длина токенов, в которые преобразуется текст токенайзеров
-            batch_sz: int
-                размер батча
         """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'device: {self.device}')
@@ -36,7 +34,6 @@ class Tester:
         self.tokenizer = BertTokenizer.from_pretrained(vocab)
         self.model = model
         self.token_len = token_len
-        self.batch_sz = batch_sz
         self.res_df = None
 
     def get_mistakes(self, export_file=None, print_accs=False):
@@ -46,7 +43,7 @@ class Tester:
         Параметры:
             export_file: str (default: None)
                 путь к csv файлу, в который нужно сохранить результат
-                при None, не будет сохранять результаты в файл
+                при None, не будет сохранять результаты
             print_accs: bool (default: False)
                 вывести ли в консоль точность модели по каждому классу поотдельности
 
@@ -83,7 +80,7 @@ class Tester:
         """
         self.model = torch.load(path, map_location=self.device)
 
-    def test(self, test_csv: str, export_file=None):
+    def test(self, test_csv: str, batch_sz=16, export_file=None):
         """
         Метод для инференса модели
 
@@ -92,6 +89,12 @@ class Tester:
                 таблица исходных данных с колонками:
                     text : str - входной текст
                     class_true: str - истинный лейбл
+            batch_sz: int
+                размер батча
+            export_file: str (default: None)
+                путь к csv файлу, в который нужно сохранить результат
+                при None, не будет сохранять результаты
+
 
         Возвращает:
             pd.DataFrame
@@ -113,7 +116,7 @@ class Tester:
             self.res_df["class_prediction"] = np.NaN
             self.res_df["probabilities"] = np.NaN
             test = Dataset(self.tokenizer, test_df,  self.token_len)
-            test_dataloader = DataLoader(test, batch_size=self.batch_sz)
+            test_dataloader = DataLoader(test, batch_size=batch_sz)
             self.model.eval()
             i = 0
             with torch.no_grad():
@@ -137,6 +140,6 @@ class Tester:
             print("Нет модели")
 
 
-if __name__ == "__main__":
-    df1 = pd.DataFrame(np.random.randint(0, high=2, size=(16, 2)))
-    print(df1[df1[0] == 0])
+# if __name__ == "__main__":
+#     df1 = pd.DataFrame(np.random.randint(0, high=2, size=(16, 2)))
+#     print(df1[df1[0] == 0])
