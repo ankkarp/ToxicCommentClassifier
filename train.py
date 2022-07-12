@@ -34,7 +34,7 @@ class Trainer(Tester):
                 длина токенов, в которые преобразуется текст токенайзеров
         """
         self.model_class = model_class
-        Tester.__init__(self, model=None, vocab=vocab, token_len=token_len, batch_sz=batch_sz)
+        Tester.__init__(self, model=None, vocab=vocab, token_len=token_len)
         self.history = None
 
     def get_history(self):
