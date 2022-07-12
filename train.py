@@ -179,8 +179,8 @@ class Trainer(Tester):
         train = Dataset(tokenizer, train_df, self.token_len)
         val = Dataset(tokenizer, val_df, self.token_len)
 
-        train_dataloader = DataLoader(train, batch_size=self.batch_sz, shuffle=True)
-        val_dataloader = DataLoader(val, batch_size=self.batch_sz)
+        train_dataloader = DataLoader(train, batch_size=batch_sz, shuffle=True)
+        val_dataloader = DataLoader(val, batch_size=batch_sz)
 
         log_template = "\nEpoch {}/{}:\n\ttrain_loss: {:0.4f}\t train_acc: {:0.4f}\t train_f1_score: {:0.4f}\n" \
                        "\tval_loss: {:0.4f}\t val_acc: {:0.4f}\t val_f1_score: {:0.4f}"
@@ -189,7 +189,7 @@ class Trainer(Tester):
             create_folder(name)
             if wandb_logging:
                 run = wandb.init(project=name, config={"learning_rate": lr, "epochs": epochs,
-                                                       "batch_size": self.batch_sz, "token_length": self.token_len,
+                                                       "batch_size": batch_sz, "token_length": self.token_len,
                                                        "vocabulary": self.vocab, "model_type": type(self.model)})
 
             for ep in tqdm(range(epochs)):
