@@ -16,13 +16,19 @@ class Tester:
     """
     Класс тестировщика, позволяет провести инференс модели
     """
-    def __init__(self, model=None, vocab='DeepPavlov/rubert-base-cased-conversational', token_len=64, batch_sz=16):
+    def __init__(self, model=None, vocab='DeepPavlov/rubert-base-cased-conversational', token_len=128, batch_sz=16):
         """
         Конструктор тестировщика
 
         Параметры:
-            model - модель, которую нужно протестировать
-            vocab
+            model
+                модель, которую нужно протестировать
+            vocab: str (default: 'DeepPavlov/rubert-base-cased-conversational')
+                название модели/словаря bert
+            token_len: int
+                длина токенов, в которые преобразуется текст токенайзеров
+            batch_sz: int
+                размер батча
         """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'device: {self.device}')
@@ -33,19 +39,20 @@ class Tester:
         self.batch_sz = batch_sz
         self.res_df = None
 
-    def analyse_results(self, df):
+    def get_mistakes(self, export_file=None, print_accs=False):
         """
-        Метод, позволяющий получить точность модели по классам, основываясть на таблице результатов инференса
+        Метод для получения датафрейм данных инференса, которые были класифицированы неправильно
 
         Параметры:
-            df: pd.DataFrame
-                таблица исходный данных с колонками:
-                    text : str - входной текст
-                    class_true: str - истинный лейбл
+            export_file: str (default: None)
+                путь к csv файлу, в который нужно сохранить результат
+                при None, не будет сохранять результаты в файл
+            print_accs: bool (default: False)
+                вывести ли в консоль точность модели по каждому классу поотдельности
 
         Возвращает:
             pd.DataFrame
-                таблица данных инференса с колонками:
+                таблица данных, на которых модель ошиблась, с колонками:
                     text : str
                         входной текст
                     class_true: str
@@ -55,24 +62,49 @@ class Tester:
                     probabilities: float
                         вероятность предсказанного класса
         """
-        total = len(df.loc[df["class_prediction"] == df["class_true"]]) / len(df)
-        print("Accuracy:")
-        for d in df, df.loc[df["class_true"] == "toxic"], df.loc[df["class_true"] == "non-toxic"]:
-            print(f'\t{len(d.loc[d["class_prediction"] == d["class_true"]]) / len(d)}')
+        mistakes_df = self.res_df.loc[self.res_df["class_prediction"] != self.res_df["class_true"]]
+        if export_file:
+            mistakes_df.to_csv(export_file)
+        if print_accs:
+            print("accuracy \t toxic \tnon-toxic", end='\n\t\t\t')
+            print(f'{1 - sum(mistakes_df["class_true"] == "toxic") / len(self.res_df):0.4f}', end='\t')
+            print(f'{1 - sum(mistakes_df["class_true"] == "non-toxic") / len(self.res_df):0.4f}', end='\t')
+        return mistakes_df
 
     def load_model(self, path: str):
         """
-        Функция загрузки модели.
+        Метод для загрузки модели BERT из файла
 
         Параметры:
-            path: str - путь к файлу модели
+            path: str
+                путь к файлу модели
 
-        Возвращает:
-            ничего
+        Ничего не возвращает
         """
         self.model = torch.load(path, map_location=self.device)
 
-    def test(self, test_csv: str, export_file=None, analyse=True):
+    def test(self, test_csv: str, export_file=None):
+        """
+        Метод для инференса модели
+
+        Параметры:
+            df: pd.DataFrame
+                таблица исходных данных с колонками:
+                    text : str - входной текст
+                    class_true: str - истинный лейбл
+
+        Возвращает:
+            pd.DataFrame
+                таблица результата инференса:
+                    text : str
+                        входной текст
+                    class_true: str
+                        истинный лейбл
+                    class_prediction: str
+                        предсказанный лейбл
+                    probabilities: float
+                        вероятность предсказанного класса
+        """
         labels = {0: "non-toxic", 1: "toxic"}
         if self.model:
             test_df = load_csv_as_df(test_csv)
@@ -98,11 +130,8 @@ class Tester:
                     i += len(y_batch)
             self.res_df["class_true"].replace(labels, inplace=True)
             self.res_df["class_prediction"].replace(labels, inplace=True)
-            print(self.res_df.info())
             if export_file:
                 self.res_df.to_csv(export_file)
-            if analyse:
-                print(self.analyse_results(self.res_df))
             return self.res_df
         else:
             print("Нет модели")

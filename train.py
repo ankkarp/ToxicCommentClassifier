@@ -1,6 +1,5 @@
 import traceback
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
@@ -10,7 +9,6 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertForSequenceClassification, BertTokenizer, logging
-import gc
 
 from BertClassifier import BertClassifier
 from Dataset import Dataset
@@ -41,17 +39,9 @@ class Trainer(Tester):
         Tester.__init__(self, model=None, vocab=vocab, token_len=token_len, batch_sz=batch_sz)
         self.history = None
 
-    def plot_history(self):
-        """Стоит график обучения"""
-        for i, metric in enumerate(("loss", "acc", "f1_score")):
-            ax = plt.subplot(1, 3, i+1)
-            ax.title.set_text(metric)
-            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join(("train", metric)))],
-                    label="train")
-            ax.plot([i for i in range(1, len(self.history.index) + 1)], self.history[('_'.join(("train", metric)))],
-                    label="val")
-            ax.legend()
-        plt.show()
+    def get_history(self):
+        """Геттер истории обучения"""
+        return self.history
 
     def __epoch(self, dataloader, loss_fn, ep, opt=None):
         """
@@ -76,7 +66,6 @@ class Trainer(Tester):
             input_id = x_batch['input_ids'].squeeze(1).to(self.device)
             output = self.model(input_id, mask) if isinstance(self.model, BertClassifier) else \
                 self.model(input_id, mask, return_dict=False)[0]
-            # print(output, y_batch)
             loss = loss_fn(output, y_batch.to(dtype=torch.long))
             batch_loss.append(loss.item())
 
@@ -95,10 +84,9 @@ class Trainer(Tester):
 
     def __init_model(self):
         """
-        Метод инициализации новой модели класса поля model_class
+        Метод для инициализации новой модели класса поля model_class
 
-        Параметры:
-            нет
+        Нет параметров
 
         Ничего не возвращает
         """
@@ -111,20 +99,21 @@ class Trainer(Tester):
 
     def balance_data(self, df: pd.DataFrame, sz=None):
         """
-        Функция для балансировки датасета.
+        Метод для балансировки датасета.
 
         Параметры:
             df : pd.Dataframe
-                Датасет с колонками:
+                Табница данных с колонками:
                     comment: str
                         текст комментария
                     toxic: float
                         токсичность комментария (0 - нетоксичный, 1 - токсичный)
-                    sz: int | None (default None)
-                        желаемый размер датасета (если датасет нужно уменьшить),
-                        если None - датасет принимает размер наименьшего класса * 2
+                    sz: int (default: None - датасет принимает размер наименьшего класса * 2)
+                        до какого размера уменьшить датасет
 
-        Ничего не возвращает
+        Возвращает:
+            pd.DataFrame
+                сбалансированные данные для датасета
         """
         big_class, small_class = df["toxic"].value_counts().index
         nontoxic_sample = df[df["toxic"] == big_class].sample(sz // 2 if sz else len(df[df["toxic"] == small_class]))
@@ -134,9 +123,11 @@ class Trainer(Tester):
         return pd.concat((toxic_sample, nontoxic_sample))
 
     def get_model(self):
+        """Геттер модели"""
         return self.model
 
     def save_model(self, path):
+        """Метод для сохранения модели как файла"""
         torch.save(self.model, path)
 
     def train(self, train_csv: str, val_csv: str, lr=5e-6, epochs=4, name='ToxicCommentClassifier',
@@ -226,3 +217,19 @@ class Trainer(Tester):
             if wandb_logging:
                 run.finish(quiet=True)
             return self.model
+
+
+#тестовая демонстрация работоспособности кода, подаются параметры для наибыстрешейего выполнения на пк
+if __name__ == "__main__":
+    trainer = Trainer(token_len=4, batch_sz=8)
+    model = trainer.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True,
+                          balance_sz=50, epochs=1, wandb_logging=True)
+    print(trainer.test(test_csv='data_test_public[494].csv', export_file='res.csv'))
+    print(trainer.get_mistakes(export_file='mistakes.csv', print_accs=True))
+    print(trainer.get_history())
+#     trainer2 = Trainer(model_class=BertClassifier, token_len=4, batch_sz=8)
+#     model2 = trainer2.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv', balance=True,
+#                             balance_sz=50, epochs=1)
+#     tester = Tester(model2, token_len=4, batch_sz=8)
+#     print(trainer2.test(test_csv='data_test_public[494].csv', export_file='res2.csv'))
+#     print(trainer2.get_mistakes(export_file='mistakes2.csv', print_accs=True))
