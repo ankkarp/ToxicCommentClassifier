@@ -22,3 +22,5 @@ trainer = Trainer()
 model = trainer.train(train_csv='data_train[493].csv', val_csv='data_test_public[494].csv')
 
 Также объект тренировщика наследует все методы инференса
+
+Ссылка на модель: https://drive.google.com/file/d/1xU9p1TTLU3_sFSF73NXMvk9t7N4HJEOJ/view?usp=sharing
