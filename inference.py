@@ -64,8 +64,7 @@ class Tester:
         if export_file:
             mistakes_df.to_csv(export_file)
         if print_accs:
-            print("accuracy\t toxic \tnon-toxic", end='\n\t\t\t')
-            print(f'{1 - sum(mistakes_df) / len(self.res_df):0.4f}', end='\t')
+            print("accuracy\t toxic \tnon-toxic", end='\n\t\t')
             print(f'{1 - sum(mistakes_df["class_true"] == "toxic") / len(self.res_df):0.4f}', end='\t')
             print(f'{1 - sum(mistakes_df["class_true"] == "non-toxic") / len(self.res_df):0.4f}', end='\t')
         return mistakes_df
