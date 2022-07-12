@@ -7,6 +7,7 @@ import numpy as np
 
 from BertClassifier import BertClassifier
 from Dataset import Dataset
+from metrics import f1_score
 from utils import load_csv_as_df
 
 pd.options.mode.chained_assignment = None
@@ -63,7 +64,8 @@ class Tester:
         if export_file:
             mistakes_df.to_csv(export_file)
         if print_accs:
-            print("accuracy \t toxic \tnon-toxic", end='\n\t\t\t')
+            print("accuracy\t toxic \tnon-toxic", end='\n\t\t\t')
+            print(f'{1 - sum(mistakes_df) / len(self.res_df):0.4f}', end='\t')
             print(f'{1 - sum(mistakes_df["class_true"] == "toxic") / len(self.res_df):0.4f}', end='\t')
             print(f'{1 - sum(mistakes_df["class_true"] == "non-toxic") / len(self.res_df):0.4f}', end='\t')
         return mistakes_df
@@ -131,6 +133,8 @@ class Tester:
                     self.res_df.loc[self.res_df.index[i: i + len(y_batch)], "probabilities"] = \
                         probs.cpu().detach().numpy()
                     i += len(y_batch)
+
+            print(f'F1 score: {f1_score(self.res_df["class_true"], self.res_df["class_prediction"])}')
             self.res_df["class_true"].replace(labels, inplace=True)
             self.res_df["class_prediction"].replace(labels, inplace=True)
             if export_file:
