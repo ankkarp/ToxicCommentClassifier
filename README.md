@@ -112,4 +112,4 @@ train(train_csv: str, val_csv: str, lr=5e-6, epochs=4, batch_sz=16, name='ToxicC
 | balance_sz | азмер, до которого нужно уменьшить датасеты (при balance=True) | int | None
 | wandb_logging | логировать в wandb | bool | True
 
-Возвращает таблицу результата инференса
+Возвращает обученную модель
