@@ -36,7 +36,16 @@ trainer.get_mistakes(print_accs=True)
 Ссылка на модель: https://drive.google.com/file/d/1xU9p1TTLU3_sFSF73NXMvk9t7N4HJEOJ/view?usp=sharing
 
 f1 score: 0.91563
+
 CrossEntropyLoss = 0.151
+
+Была обучена с такими параметрами:
+
+оптимизатор Adam c lr=5e-6
+
+размер батчей 16
+
+датасет несбалансированный
 
 ## Функционал
 
